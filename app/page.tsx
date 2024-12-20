@@ -1,101 +1,181 @@
-import Image from "next/image";
+"use client"
+import React, { useState } from "react";
+import Navbar from "@/components/Navbar/page";
 
-export default function Home() {
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { X } from "lucide-react";
+
+const Page = () => {
+  const fruits = ["apple", "banana", "blueberry", "grapes", "pineapple"];
+  const testData = ["option 1", "option 2", "option 3", "option 4"];
+  const [selectedFruit, setSelectedFruit] = useState("");
+  const [selectedOption, setSelectedOption] = useState("");
+  const [items, setItems] = useState([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editingTexts, setEditingTexts] = useState([]);
+
+  const handleAddItem = () => {
+    if (selectedFruit && selectedOption) {
+      const existingItemIndex = items.findIndex((item) => item.fruit === selectedFruit);
+      if (existingItemIndex !== -1) {
+        const updatedItems = [...items];
+        updatedItems[existingItemIndex].text += `, ${selectedOption}`;
+        setItems(updatedItems);
+      } else {
+        setItems([...items, { fruit: selectedFruit, text: selectedOption }]);
+      }
+      setSelectedFruit("");
+      setSelectedOption("");
+    } else {
+      alert("Please select both a fruit and an option!");
+    }
+  };
+
+  const handleEditClick = (index) => {
+    setEditingIndex(index);
+    setEditingTexts(items[index]?.text.split(",").map((line) => line.trim()) || []);
+    setIsDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    const updatedItems = [...items];
+    if (editingTexts.length > 0) {
+      updatedItems[editingIndex] = {
+        ...updatedItems[editingIndex],
+        text: editingTexts.join(", "),
+      };
+    } else {
+      updatedItems.splice(editingIndex, 1); // Remove item if all texts are deleted
+    }
+    setItems(updatedItems);
+    setIsDialogOpen(false);
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+    <div>
+      <Navbar />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Centered Input Section */}
+      <div className="flex flex-col items-center justify-center mt-10">
+        <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 items-center">
+          {/* Fruit Selector */}
+          <div className="w-full sm:w-auto">
+            <Select onValueChange={setSelectedFruit} value={selectedFruit}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Select a fruit" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Fruits</SelectLabel>
+                  {fruits.map((fruit) => (
+                    <SelectItem key={fruit} value={fruit}>
+                      {fruit.charAt(0).toUpperCase() + fruit.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Option Selector */}
+          <div className="w-full sm:w-auto">
+            <Select onValueChange={setSelectedOption} value={selectedOption}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="Select an option" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel>Options</SelectLabel>
+                  {testData.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Add Button */}
+          <Button onClick={handleAddItem} className={cn("w-full sm:w-auto px-4 py-2")}>
+            Add
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+
+      {/* Display Section */}
+      <div className="mt-12 px-4 md:px-0">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {fruits.map((fruit, index) => {
+            const item = items.find((item) => item.fruit === fruit);
+            return (
+              <Card key={index} className="w-full">
+                <CardHeader>
+                  <CardTitle>{fruit.charAt(0).toUpperCase() + fruit.slice(1)}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {item ? (
+                    item.text.split(",").map((line, i) => <p key={i}>{line.trim()}</p>)
+                  ) : (
+                    <p className="text-gray-500">No items added</p>
+                  )}
+                </CardContent>
+                <div className="px-4 py-2">
+                  <Button variant="outline" onClick={() => handleEditClick(index)}>
+                    Edit
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Edit Dialog */}
+      {isDialogOpen && (
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Text</DialogTitle>
+            </DialogHeader>
+            {editingTexts.length > 0 ? (
+              <div className="space-y-2">
+                {editingTexts.map((line, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <p className="flex-1">{line}</p>
+                    <Button variant="ghost" onClick={() => setEditingTexts(editingTexts.filter((_, i) => i !== index))}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500">No items added</p>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit}>Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
-}
+};
+
+export default Page;
