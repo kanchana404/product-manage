@@ -27,6 +27,10 @@ const Page = () => {
     setIsDialogOpen(true);
   };
 
+  const handleDelete = (index) => {
+    setNames(names.filter((_, i) => i !== index));
+  };
+
   const handleSaveEdit = () => {
     const updatedNames = [...names];
     updatedNames[editingIndex] = editingName;
@@ -41,7 +45,7 @@ const Page = () => {
         <div className="flex space-x-4 items-center">
           <Input
             type="text"
-            placeholder="Enter a name"
+            placeholder="Enter a product name"
             value={inputName}
             onChange={(e) => setInputName(e.target.value)}
           />
@@ -51,10 +55,14 @@ const Page = () => {
           {names.map((name, index) => (
             <div
               key={index}
-              className="p-4 border rounded-md shadow-md cursor-pointer"
-              onClick={() => handleEditClick(index)}
+              className="p-4 border rounded-md shadow-md flex justify-between items-center"
             >
-              {name}
+              <div className="flex-1 cursor-pointer" onClick={() => handleEditClick(index)}>
+                {name}
+              </div>
+              <Button variant="destructive" onClick={() => handleDelete(index)}>
+                Delete
+              </Button>
             </div>
           ))}
         </div>
@@ -72,7 +80,7 @@ const Page = () => {
                 type="text"
                 value={editingName}
                 onChange={(e) => setEditingName(e.target.value)}
-                placeholder="Edit name"
+                placeholder="Edit product name"
               />
             </div>
             <DialogFooter>
