@@ -1,47 +1,187 @@
-"use client"
-import React, { useState } from "react";
+// app/product/page.tsx
+
+"use client";
+
+import React, { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar/page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+
+
+interface Product {
+  _id: string;
+  name: string;
+}
 
 const Page = () => {
-  const [names, setNames] = useState([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [inputName, setInputName] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingName, setEditingName] = useState("");
 
-  const handleAddName = () => {
-    if (inputName.trim() === "") {
-      alert("Please enter a name!");
-      return;
+  const { toast } = useToast();
+
+  // Fetch products on component mount
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch("/api/product");
+      if (!res.ok) {
+        throw new Error("Failed to fetch products");
+      }
+      const data: Product[] = await res.json();
+      setProducts(data);
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch products.",
+        variant: "destructive",
+      });
     }
-    setNames([...names, inputName]);
-    setInputName("");
   };
 
-  const handleEditClick = (index) => {
-    setEditingIndex(index);
-    setEditingName(names[index]);
+  const handleAddName = async () => {
+    if (inputName.trim() === "") {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a product name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: inputName.trim() }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to add product");
+      }
+
+      const newProduct: Product = await res.json();
+      setProducts([newProduct, ...products]);
+      setInputName("");
+
+      toast({
+        title: "Success",
+        description: `${newProduct.name} has been added.`,
+      });
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add product.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditClick = (product: Product) => {
+    setEditingProduct(product);
+    setEditingName(product.name);
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (index) => {
-    setNames(names.filter((_, i) => i !== index));
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+
+    try {
+      const res = await fetch("/api/product", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to delete product");
+      }
+
+      setProducts(products.filter((product) => product._id !== id));
+
+      toast({
+        title: "Deleted",
+        description: "Product has been deleted.",
+        variant: "destructive",
+      });
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete product.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleSaveEdit = () => {
-    const updatedNames = [...names];
-    updatedNames[editingIndex] = editingName;
-    setNames(updatedNames);
-    setIsDialogOpen(false);
+  const handleSaveEdit = async () => {
+    if (!editingProduct) return;
+
+    if (editingName.trim() === "") {
+      toast({
+        title: "Validation Error",
+        description: "Product name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/product", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingProduct._id, name: editingName.trim() }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update product");
+      }
+
+      const updatedProduct: Product = await res.json();
+      setProducts(
+        products.map((product) => (product._id === updatedProduct._id ? updatedProduct : product))
+      );
+      setIsDialogOpen(false);
+      setEditingProduct(null);
+      setEditingName("");
+
+      toast({
+        title: "Success",
+        description: `${updatedProduct.name} has been updated.`,
+      });
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update product.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
     <div>
       <Navbar />
       <div className="p-8">
+        {/* Input Section */}
         <div className="flex space-x-4 items-center">
           <Input
             type="text"
@@ -51,16 +191,24 @@ const Page = () => {
           />
           <Button onClick={handleAddName}>Add</Button>
         </div>
+
+        {/* Display Section */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {names.map((name, index) => (
+          {products.map((product) => (
             <div
-              key={index}
+              key={product._id}
               className="p-4 border rounded-md shadow-md flex justify-between items-center"
             >
-              <div className="flex-1 cursor-pointer" onClick={() => handleEditClick(index)}>
-                {name}
+              <div
+                className="flex-1 cursor-pointer"
+                onClick={() => handleEditClick(product)}
+              >
+                {product.name}
               </div>
-              <Button variant="destructive" onClick={() => handleDelete(index)}>
+              <Button
+                variant="destructive"
+                onClick={() => handleDelete(product._id)}
+              >
                 Delete
               </Button>
             </div>
@@ -69,11 +217,11 @@ const Page = () => {
       </div>
 
       {/* Edit Dialog */}
-      {isDialogOpen && (
+      {isDialogOpen && editingProduct && (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Edit Name</DialogTitle>
+              <DialogTitle>Edit Product</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <Input
@@ -84,7 +232,10 @@ const Page = () => {
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsDialogOpen(false)}
+              >
                 Cancel
               </Button>
               <Button onClick={handleSaveEdit}>Save</Button>
