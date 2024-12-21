@@ -36,24 +36,28 @@ interface Product {
   name: string;
 }
 
-interface Item {
-  city: string;
-  products: string[];
+interface Association {
+  _id: string;
+  city: City;
+  products: Product[];
 }
 
 const Page = () => {
   const [cities, setCities] = useState<City[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [selectedCity, setSelectedCity] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState("");
-  const [items, setItems] = useState<Item[]>([]);
+  const [selectedCity, setSelectedCity] = useState<string>("");
+  const [selectedProduct, setSelectedProduct] = useState<string>("");
+  const [associations, setAssociations] = useState<Association[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingAssociation, setEditingAssociation] = useState<Association | null>(null);
   const [editingProducts, setEditingProducts] = useState<string[]>([]);
   const [isLoadingCities, setIsLoadingCities] = useState<boolean>(false);
   const [isLoadingProducts, setIsLoadingProducts] = useState<boolean>(false);
+  const [isLoadingAssociations, setIsLoadingAssociations] = useState<boolean>(false);
   const [errorCities, setErrorCities] = useState<string | null>(null);
   const [errorProducts, setErrorProducts] = useState<string | null>(null);
+  const [errorAssociations, setErrorAssociations] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState<boolean>(false);
 
   // Fetch cities from the API
   useEffect(() => {
@@ -101,51 +105,162 @@ const Page = () => {
     fetchProducts();
   }, []);
 
-  const handleAddItem = () => {
-    if (selectedCity && selectedProduct) {
-      const existingItemIndex = items.findIndex(
-        (item) => item.city === selectedCity
-      );
-      if (existingItemIndex !== -1) {
-        const updatedItems = [...items];
-        if (!updatedItems[existingItemIndex].products.includes(selectedProduct)) {
-          updatedItems[existingItemIndex].products.push(selectedProduct);
-          setItems(updatedItems);
-        } else {
-          alert("Product already added to this city!");
+  // Fetch associations from the API
+  useEffect(() => {
+    const fetchAssociations = async () => {
+      setIsLoadingAssociations(true);
+      try {
+        const response = await fetch("/api/city-product");
+        if (!response.ok) {
+          throw new Error("Failed to fetch associations");
         }
-      } else {
-        setItems([...items, { city: selectedCity, products: [selectedProduct] }]);
+        const data: Association[] = await response.json();
+        setAssociations(data);
+        setErrorAssociations(null);
+      } catch (err: any) {
+        console.error("Error fetching associations:", err);
+        setErrorAssociations(err.message || "An error occurred");
+      } finally {
+        setIsLoadingAssociations(false);
       }
-      setSelectedCity("");
-      setSelectedProduct("");
+    };
+
+    fetchAssociations();
+  }, []);
+
+  const handleAddItem = async () => {
+    if (selectedCity && selectedProduct) {
+      setIsAdding(true);
+      try {
+        // Find the city and product IDs
+        const city = cities.find(c => c.name === selectedCity);
+        const product = products.find(p => p.name === selectedProduct);
+
+        if (!city || !product) {
+          alert("Selected city or product not found");
+          return;
+        }
+
+        const response = await fetch("/api/city-product", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            cityId: city._id,
+            productIds: [product._id],
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to add product to city");
+        }
+
+        const newAssociation: Association = await response.json();
+
+        // Update the associations state
+        setAssociations(prev => {
+          const existing = prev.find(a => a.city._id === city._id);
+          if (existing) {
+            // Merge products, avoiding duplicates
+            const updatedProductsMap = new Map(existing.products.map(p => [p._id, p]));
+            newAssociation.products.forEach(p => updatedProductsMap.set(p._id, p));
+            const updatedProducts = Array.from(updatedProductsMap.values());
+            return prev.map(a =>
+              a.city._id === city._id ? { ...a, products: updatedProducts } : a
+            );
+          } else {
+            return [...prev, newAssociation];
+          }
+        });
+
+        // Reset selections
+        setSelectedCity("");
+        setSelectedProduct("");
+      } catch (error: any) {
+        alert(error.message || "An error occurred while adding the product to the city");
+      } finally {
+        setIsAdding(false);
+      }
     } else {
       alert("Please select both a city and a product!");
     }
   };
 
-  const handleEditClick = (index: number) => {
-    setEditingIndex(index);
-    setEditingProducts(items[index]?.products || []);
+  const handleEditClick = (association: Association) => {
+    setEditingAssociation(association);
+    setEditingProducts(association.products.map(p => p._id));
     setIsDialogOpen(true);
   };
 
-  const handleSaveEdit = () => {
-    if (editingIndex === null) return;
+  const handleSaveEdit = async () => {
+    if (!editingAssociation) return;
 
-    const updatedItems = [...items];
-    if (editingProducts.length > 0) {
-      updatedItems[editingIndex] = {
-        ...updatedItems[editingIndex],
-        products: editingProducts,
-      };
-    } else {
-      updatedItems.splice(editingIndex, 1); // Remove item if all products are deleted
+    try {
+      const response = await fetch("/api/city-product", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cityId: editingAssociation.city._id,
+          productIds: editingProducts,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update products for city");
+      }
+
+      const updatedAssociation: Association = await response.json();
+
+      setAssociations(prev =>
+        prev.map(a => (a.city._id === updatedAssociation.city._id ? updatedAssociation : a))
+      );
+
+      setIsDialogOpen(false);
+      setEditingAssociation(null);
+      setEditingProducts([]);
+    } catch (error: any) {
+      alert(error.message || "An error occurred while updating the products for the city");
     }
-    setItems(updatedItems);
-    setIsDialogOpen(false);
-    setEditingIndex(null);
-    setEditingProducts([]);
+  };
+
+  const handleRemoveProduct = async (association: Association, productId: string) => {
+    try {
+      const response = await fetch("/api/city-product", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cityId: association.city._id,
+          productIds: [productId],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to remove product from city");
+      }
+
+      // Update the associations state
+      setAssociations(prev => {
+        const updated = prev.map(a => {
+          if (a.city._id === association.city._id) {
+            const updatedProducts = a.products.filter(p => p._id !== productId);
+            return { ...a, products: updatedProducts };
+          }
+          return a;
+        }).filter(a => a.products.length > 0); // Remove associations with no products
+
+        return updated;
+      });
+    } catch (error: any) {
+      alert(error.message || "An error occurred while removing the product from the city");
+    }
   };
 
   return (
@@ -206,25 +321,30 @@ const Page = () => {
           </div>
 
           {/* Add Button */}
-          <Button onClick={handleAddItem} className={cn("w-full sm:w-auto px-4 py-2")}>
-            Add
+          <Button
+            onClick={handleAddItem}
+            className={cn("w-full sm:w-auto px-4 py-2")}
+            disabled={isAdding || isLoadingCities || isLoadingProducts}
+          >
+            {isAdding ? "Adding..." : "Add"}
           </Button>
         </div>
       </div>
 
       {/* Display Section */}
       <div className="mt-12 px-4 md:px-0">
-        {(isLoadingCities || isLoadingProducts) ? (
+        {(isLoadingCities || isLoadingProducts || isLoadingAssociations) ? (
           <p className="text-center text-gray-500">Loading data...</p>
-        ) : (errorCities || errorProducts) ? (
+        ) : (errorCities || errorProducts || errorAssociations) ? (
           <>
             {errorCities && <p className="text-center text-red-500">Error: {errorCities}</p>}
             {errorProducts && <p className="text-center text-red-500">Error: {errorProducts}</p>}
+            {errorAssociations && <p className="text-center text-red-500">Error: {errorAssociations}</p>}
           </>
         ) : (
           <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cities.map((city) => {
-              const item = items.find((item) => item.city === city.name);
+              const association = associations.find(a => a.city._id === city._id);
               return (
                 <Card key={city._id} className="w-full">
                   <CardHeader>
@@ -233,10 +353,20 @@ const Page = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {item && item.products.length > 0 ? (
+                    {association && association.products.length > 0 ? (
                       <ul className="list-disc list-inside">
-                        {item.products.map((product, i) => (
-                          <li key={i}>{product.charAt(0).toUpperCase() + product.slice(1)}</li>
+                        {association.products.map((product) => (
+                          <li key={product._id} className="flex items-center">
+                            {product.name.charAt(0).toUpperCase() + product.name.slice(1)}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="ml-2 text-red-500"
+                              onClick={() => handleRemoveProduct(association, product._id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </li>
                         ))}
                       </ul>
                     ) : (
@@ -244,7 +374,11 @@ const Page = () => {
                     )}
                   </CardContent>
                   <div className="px-4 py-2">
-                    <Button variant="outline" onClick={() => handleEditClick(items.indexOf(item!))}>
+                    <Button
+                      variant="outline"
+                      onClick={() => association && handleEditClick(association)}
+                      disabled={!association}
+                    >
                       Edit
                     </Button>
                   </div>
@@ -256,31 +390,32 @@ const Page = () => {
       </div>
 
       {/* Edit Dialog */}
-      {isDialogOpen && editingIndex !== null && (
+      {isDialogOpen && editingAssociation && (
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Edit Products</DialogTitle>
+              <DialogTitle>Edit Products for {editingAssociation.city.name}</DialogTitle>
             </DialogHeader>
-            {editingProducts.length > 0 ? (
-              <div className="space-y-2">
-                {editingProducts.map((product, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <p className="flex-1">{product}</p>
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        setEditingProducts(editingProducts.filter((_, i) => i !== index))
+            <div className="space-y-2">
+              {products.map((product) => (
+                <div key={product._id} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={editingProducts.includes(product._id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setEditingProducts(prev => [...prev, product._id]);
+                      } else {
+                        setEditingProducts(prev => prev.filter(pid => pid !== product._id));
                       }
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500">No products added</p>
-            )}
+                    }}
+                  />
+                  <label>
+                    {product.name.charAt(0).toUpperCase() + product.name.slice(1)}
+                  </label>
+                </div>
+              ))}
+            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
