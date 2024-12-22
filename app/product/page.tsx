@@ -1,5 +1,3 @@
-// app/product/page.tsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -15,24 +13,29 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
-
 interface Product {
   _id: string;
   name: string;
+  price: number;
+  content: string;
 }
 
 const Page = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [inputName, setInputName] = useState("");
+  const [inputPrice, setInputPrice] = useState<number>(0);
+  const [inputContent, setInputContent] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingPrice, setEditingPrice] = useState<number>(0);
+  const [editingContent, setEditingContent] = useState("");
 
   const { toast } = useToast();
 
-  // Fetch products on component mount
   useEffect(() => {
-    fetchProducts();
+    fetchProducts().then(() => setLoading(false));
   }, []);
 
   const fetchProducts = async () => {
@@ -53,7 +56,7 @@ const Page = () => {
     }
   };
 
-  const handleAddName = async () => {
+  const handleAddProduct = async () => {
     if (inputName.trim() === "") {
       toast({
         title: "Validation Error",
@@ -63,11 +66,33 @@ const Page = () => {
       return;
     }
 
+    if (inputPrice < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Price cannot be negative.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (inputContent.trim() === "") {
+      toast({
+        title: "Validation Error",
+        description: "Please enter product content.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const res = await fetch("/api/product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: inputName.trim() }),
+        body: JSON.stringify({
+          name: inputName.trim(),
+          price: inputPrice,
+          content: inputContent.trim(),
+        }),
       });
 
       if (!res.ok) {
@@ -78,6 +103,8 @@ const Page = () => {
       const newProduct: Product = await res.json();
       setProducts([newProduct, ...products]);
       setInputName("");
+      setInputPrice(0);
+      setInputContent("");
 
       toast({
         title: "Success",
@@ -96,6 +123,8 @@ const Page = () => {
   const handleEditClick = (product: Product) => {
     setEditingProduct(product);
     setEditingName(product.name);
+    setEditingPrice(product.price);
+    setEditingContent(product.content);
     setIsDialogOpen(true);
   };
 
@@ -143,11 +172,34 @@ const Page = () => {
       return;
     }
 
+    if (editingPrice < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Price cannot be negative.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (editingContent.trim() === "") {
+      toast({
+        title: "Validation Error",
+        description: "Product content cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const res = await fetch("/api/product", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingProduct._id, name: editingName.trim() }),
+        body: JSON.stringify({
+          id: editingProduct._id,
+          name: editingName.trim(),
+          price: editingPrice,
+          content: editingContent.trim(),
+        }),
       });
 
       if (!res.ok) {
@@ -157,11 +209,15 @@ const Page = () => {
 
       const updatedProduct: Product = await res.json();
       setProducts(
-        products.map((product) => (product._id === updatedProduct._id ? updatedProduct : product))
+        products.map((product) =>
+          product._id === updatedProduct._id ? updatedProduct : product
+        )
       );
       setIsDialogOpen(false);
       setEditingProduct(null);
       setEditingName("");
+      setEditingPrice(0);
+      setEditingContent("");
 
       toast({
         title: "Success",
@@ -177,19 +233,46 @@ const Page = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div>
+        <Navbar />
+        <div className="p-8">
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <Navbar />
       <div className="p-8">
-        {/* Input Section */}
-        <div className="flex space-x-4 items-center">
-          <Input
-            type="text"
-            placeholder="Enter a product name"
-            value={inputName}
-            onChange={(e) => setInputName(e.target.value)}
-          />
-          <Button onClick={handleAddName}>Add</Button>
+        {/* Input Section - Updated with grid layout */}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 grid grid-cols-3 gap-4">
+            <Input
+              type="text"
+              placeholder="Enter a product name"
+              value={inputName}
+              onChange={(e) => setInputName(e.target.value)}
+            />
+            <Input
+              type="number"
+              placeholder="Enter price"
+              value={inputPrice}
+              onChange={(e) => setInputPrice(parseFloat(e.target.value))}
+              min="0"
+              step="0.01"
+            />
+            <Input
+              type="text"
+              placeholder="Enter product content"
+              value={inputContent}
+              onChange={(e) => setInputContent(e.target.value)}
+            />
+          </div>
+          <Button onClick={handleAddProduct}>Add</Button>
         </div>
 
         {/* Display Section */}
@@ -197,17 +280,20 @@ const Page = () => {
           {products.map((product) => (
             <div
               key={product._id}
-              className="p-4 border rounded-md shadow-md flex justify-between items-center"
+              className="p-4 border rounded-md shadow-md flex flex-col justify-between"
             >
               <div
-                className="flex-1 cursor-pointer"
+                className="cursor-pointer"
                 onClick={() => handleEditClick(product)}
               >
-                {product.name}
+                <h3 className="text-lg font-semibold">{product.name}</h3>
+                <p className="text-sm text-gray-600">Price: ${product.price}</p>
+                <p className="text-sm text-gray-600">{product.content}</p>
               </div>
               <Button
                 variant="destructive"
                 onClick={() => handleDelete(product._id)}
+                className="mt-4"
               >
                 Delete
               </Button>
@@ -230,12 +316,23 @@ const Page = () => {
                 onChange={(e) => setEditingName(e.target.value)}
                 placeholder="Edit product name"
               />
+              <Input
+                type="number"
+                value={editingPrice}
+                onChange={(e) => setEditingPrice(parseFloat(e.target.value))}
+                placeholder="Edit price"
+                min="0"
+                step="0.01"
+              />
+              <Input
+                type="text"
+                value={editingContent}
+                onChange={(e) => setEditingContent(e.target.value)}
+                placeholder="Edit product content"
+              />
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                 Cancel
               </Button>
               <Button onClick={handleSaveEdit}>Save</Button>

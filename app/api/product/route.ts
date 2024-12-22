@@ -20,10 +20,17 @@ export async function GET() {
 // POST: Add a new product
 export async function POST(request: Request) {
   try {
-    const { name } = await request.json();
+    const { name, price, content } = await request.json();
 
+    // Validation
     if (!name || name.trim() === '') {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    }
+    if (price === undefined || typeof price !== 'number' || price < 0) {
+      return NextResponse.json({ error: 'Valid price is required' }, { status: 400 });
+    }
+    if (!content || content.trim() === '') {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
     }
 
     await connectToDatabase();
@@ -34,7 +41,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Product already exists' }, { status: 400 });
     }
 
-    const product = new Product({ name: name.trim() });
+    const product = new Product({ name: name.trim(), price, content: content.trim() });
     await product.save();
 
     return NextResponse.json(product, { status: 201 });
@@ -47,14 +54,20 @@ export async function POST(request: Request) {
 // PUT: Update a product
 export async function PUT(request: Request) {
   try {
-    const { id, name } = await request.json();
+    const { id, name, price, content } = await request.json();
 
+    // Validation
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Valid ID is required' }, { status: 400 });
     }
-
     if (!name || name.trim() === '') {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    }
+    if (price === undefined || typeof price !== 'number' || price < 0) {
+      return NextResponse.json({ error: 'Valid price is required' }, { status: 400 });
+    }
+    if (!content || content.trim() === '') {
+      return NextResponse.json({ error: 'Content is required' }, { status: 400 });
     }
 
     await connectToDatabase();
@@ -71,6 +84,8 @@ export async function PUT(request: Request) {
     }
 
     product.name = name.trim();
+    product.price = price;
+    product.content = content.trim();
     await product.save();
 
     return NextResponse.json(product, { status: 200 });
@@ -91,7 +106,6 @@ export async function DELETE(request: Request) {
 
     await connectToDatabase();
 
-    // Using findByIdAndDelete instead of remove
     const deletedProduct = await Product.findByIdAndDelete(id);
 
     if (!deletedProduct) {
